@@ -259,10 +259,8 @@ if submitted:
             if value != default:
                 preferences[name] = value
         try:
-            with st.status('กำลังหาไอเดียสำหรับมื้อนี้…', expanded=True) as status:
-                st.write('ทำความเข้าใจความต้องการ')
+            with st.spinner('กำลังหาเมนูให้คุณ…'):
                 plan = make_plan(gemini, model, preferences)
-                st.write('ค้นหาเมนูอ้างอิงจาก TheMealDB')
                 source_note = ''
                 try:
                     sources = cached_meals(food_key, json.dumps(plan, sort_keys=True))
@@ -271,11 +269,9 @@ if submitted:
                 except ServiceError:
                     sources = []
                     source_note = 'TheMealDB ไม่พร้อมใช้งาน ครั้งนี้ใช้เมนูที่ AI เสนอ'
-                st.write('คัดเลือกและเรียบเรียงคำแนะนำภาษาไทย')
                 result = recommend(gemini, model, preferences, sources)
                 result['source_note'] = source_note
                 st.session_state.result = result
-                status.update(label='จัดมื้อที่เหมาะกับคุณแล้ว', state='complete', expanded=False)
             entry = {'id': uuid.uuid4().hex, 'question': question.strip(), 'created': time.strftime('%Y-%m-%d %H:%M UTC', time.gmtime()), 'result': result}
             try:
                 save('history', entry, entry['id'])
