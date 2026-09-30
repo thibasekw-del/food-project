@@ -1,0 +1,116 @@
+import copy
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+from streamlit.testing.v1 import AppTest
+from services import ServiceError, recommend, token_for
+
+RECIPE = dict(name='ข้าวผัดไข่', reason='ใช้วัตถุดิบที่มี', source_id='', ingredients=['ข้าว 1 ถ้วย', 'ไข่ 1 ฟอง'],
+              missing=['น้ำมัน'], steps=['ผัดไข่ให้สุก ใส่ข้าว ผัดให้ร้อนทั่ว'], time='ประมาณ 15 นาที', tags=['ไม่เผ็ด'])
+RESULT = dict(message='ลองเมนูนี้ครับ', recipes=[RECIPE])
+
+
+class MenuTests(unittest.TestCase):
+    def app(self, key=''):
+        at = AppTest.from_file(str(Path(__file__).resolve().parents[1] / 'app.py'), default_timeout=15)
+        at.secrets['GEMINI_API_KEY'] = key
+        at.secrets['FIREBASE_API_KEY'] = ''
+        at.secrets['FIREBASE_PROJECT_ID'] = ''
+        at.session_state['user'] = {'uid': 'test-user', 'email': 'test@example.com', 'profile_synced': True}
+        return at.run()
+
+    def test_login_gate_and_logout(self):
+        at = self.app()
+        at.session_state['history'] = [{'private': 'data'}]
+        next(b for b in at.button if b.label == 'ออกจากระบบ').click().run()
+        self.assertFalse(at.exception)
+        self.assertIsNone(at.session_state.user)
+        self.assertEqual(at.session_state.history, [])
+        self.assertEqual(len(at.text_area), 0)
+        self.assertEqual([t.label for t in at.tabs], ['เข้าสู่ระบบ', 'สมัครสมาชิก'])
+
+    @patch('services.firestore', return_value={})
+    @patch('services.login', return_value={'uid': 'new-user', 'email': 'new@example.com'})
+    def test_register_profile_and_login(self, auth, database):
+        at = self.app()
+        at.session_state['user'] = None
+        at.secrets['FIREBASE_API_KEY'] = 'test-key'
+        at.secrets['FIREBASE_PROJECT_ID'] = 'test-project'
+        at.run()
+        at.text_input(key='email-True').input('new@example.com')
+        at.text_input(key='password-True').input('password123')
+        next(x for x in at.text_input if x.label == 'ยืนยันรหัสผ่าน').input('password123')
+        next(b for b in at.button if b.label == 'สมัครสมาชิก').click().run()
+        self.assertFalse(at.exception)
+        self.assertEqual(at.session_state.user['uid'], 'new-user')
+        self.assertTrue(auth.call_args.args[3])
+        payload = database.call_args.args[-1]
+        self.assertEqual(payload, {'uid': 'new-user', 'email': 'new@example.com'})
+        self.assertNotIn('password', payload)
+
+    def test_initial_and_missing_key(self):
+        at = self.app()
+        self.assertFalse(at.exception)
+        at.text_area[0].input('อยากกินเส้น')
+        at.button[0].click().run()
+        self.assertFalse(at.exception)
+        self.assertIn('GEMINI_API_KEY', at.error[0].value)
+
+    def test_empty_request(self):
+        at = self.app('fake')
+        at.button[0].click().run()
+        self.assertTrue(at.warning)
+        self.assertFalse(at.exception)
+
+    @patch('services.make_plan', return_value={'ingredients': ['egg'], 'searches': []})
+    @patch('services.find_meals', return_value=[])
+    @patch('services.recommend')
+    def test_pantry_favorite_and_history(self, mock_recommend, *_):
+        mock_recommend.return_value = copy.deepcopy(RESULT)
+        at = self.app('fake')
+        at.radio[0].set_value('🥕 มีอะไรในตู้เย็น').run()
+        at.text_area[0].input('ไข่ ข้าว')
+        at.button[0].click().run()
+        self.assertFalse(at.exception)
+        self.assertEqual(len(at.session_state.history), 1)
+        self.assertEqual(mock_recommend.call_args.args[2]['mode'], 'pantry')
+        next(b for b in at.button if b.label == '♡ เก็บเมนูนี้').click().run()
+        self.assertFalse(at.exception)
+        self.assertEqual(len(at.session_state.favorites), 1)
+        with patch('services.firestore', return_value=at.session_state.favorites):
+            at.sidebar.radio[0].set_value('เมนูโปรด').run()
+        self.assertFalse(at.exception)
+        self.assertTrue(any(x.value == 'ข้าวผัดไข่' for x in at.subheader))
+
+    @patch('services.make_plan', side_effect=ServiceError('โควตาบริการเต็ม'))
+    def test_ai_failure_is_visible(self, _):
+        at = self.app('fake')
+        at.text_area[0].input('เส้น')
+        at.button[0].click().run()
+        self.assertFalse(at.exception)
+        self.assertIn('โควตา', at.error[0].value)
+
+    @patch('services.generate')
+    def test_hallucinated_source_is_removed(self, generate):
+        result = copy.deepcopy(RESULT)
+        result['recipes'][0]['source_id'] = 'invented'
+        generate.return_value = result
+        actual = recommend('fake', 'model', {}, [])
+        self.assertEqual(actual['recipes'][0]['source_id'], '')
+        self.assertEqual(actual['recipes'][0]['image'], '')
+
+    @patch('services.generate', return_value={'message': 'ok', 'recipes': [{'name': 'incomplete'}]})
+    def test_invalid_recipe_rejected(self, _):
+        with self.assertRaises(ServiceError):
+            recommend('fake', 'model', {}, [])
+
+    @patch('services.request', return_value={'id_token': 'new', 'refresh_token': 'newrefresh', 'expires_in': '3600'})
+    def test_expired_auth_refreshes(self, request):
+        user = dict(expires=0, refresh='old', token='expired')
+        self.assertEqual(token_for('fake', user), 'new')
+        self.assertEqual(user['refresh'], 'newrefresh')
+
+
+if __name__ == '__main__':
+    unittest.main()
