@@ -271,6 +271,5 @@ if st.session_state.result:
     for i, recipe in enumerate(result['recipes']):
         with columns[i]:
             recipe_card(recipe, f'result-{i}')
-    st.download_button('ดาวน์โหลดคำแนะนำ', json.dumps(result, ensure_ascii=False, indent=2), 'menu-recommendations.json', 'application/json')
 else:
     st.markdown('<div class="empty"><span>🥬 &nbsp; 🍜 &nbsp; 🥚</span><h3>มื้อดี ๆ เริ่มจากไอเดียเล็ก ๆ</h3><p>บอกสิ่งที่อยากกิน หรือวัตถุดิบที่มี แล้วให้เราช่วยคิดเมนู</p></div>', unsafe_allow_html=True)
