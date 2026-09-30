@@ -113,18 +113,6 @@ def recipe_card(recipe, key):
                 st.error(str(exc))
 
 
-with st.sidebar:
-    st.markdown('## 🥗 Menu Mate')
-    st.caption('มื้อที่ใช่ เริ่มจากสิ่งที่คุณมี')
-    page = st.radio('เมนู', ['หาเมนูวันนี้', 'เมนูโปรด', 'ประวัติคำแนะนำ'], label_visibility='collapsed')
-    st.divider()
-    if st.session_state.user:
-        st.caption('เข้าสู่ระบบแล้ว')
-        st.write(st.session_state.user['email'])
-    else:
-        st.caption('เข้าสู่ระบบเพื่อค้นหาและเก็บเมนูของคุณ')
-    st.caption('สูตรและรูปภาพ: TheMealDB • คำแนะนำภาษาไทย: Gemini')
-
 if st.session_state.user:
     _, menu_column = st.columns([12, 1])
     with menu_column:
@@ -176,6 +164,8 @@ if not st.session_state.user:
                         st.rerun()
     st.caption('บัญชีจัดการด้วย Firebase Authentication และเก็บโปรไฟล์ใน Firestore')
     st.stop()
+
+page = st.radio('หน้าเว็บ', ['หาเมนูวันนี้', 'เมนูโปรด', 'ประวัติคำแนะนำ'], horizontal=True)
 
 # Retry profile sync on subsequent runs if Firestore was not configured at signup.
 if not st.session_state.user.get('profile_synced'):

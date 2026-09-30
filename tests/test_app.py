@@ -109,7 +109,7 @@ class MenuTests(unittest.TestCase):
     def test_pantry_favorite_and_history(self, mock_recommend, *_):
         mock_recommend.return_value = copy.deepcopy(RESULT)
         at = self.app('fake')
-        at.radio[0].set_value('🥕 มีอะไรในตู้เย็น').run()
+        at.radio[1].set_value('🥕 มีอะไรในตู้เย็น').run()
         at.text_area[0].input('ไข่ ข้าว')
         next(b for b in at.button if b.label.startswith('หาเมนูที่ใช่')).click().run()
         self.assertFalse(at.exception)
@@ -119,9 +119,14 @@ class MenuTests(unittest.TestCase):
         self.assertFalse(at.exception)
         self.assertEqual(len(at.session_state.favorites), 1)
         with patch('services.firestore', return_value=at.session_state.favorites):
-            at.sidebar.radio[0].set_value('เมนูโปรด').run()
+            at.radio[0].set_value('เมนูโปรด').run()
         self.assertFalse(at.exception)
         self.assertTrue(any(x.value == 'ข้าวผัดไข่' for x in at.subheader))
+
+    def test_main_navigation_is_visible(self):
+        at = self.app()
+        self.assertEqual(at.radio[0].label, 'หน้าเว็บ')
+        self.assertEqual(at.radio[0].options, ['หาเมนูวันนี้', 'เมนูโปรด', 'ประวัติคำแนะนำ'])
 
     @patch('services.make_plan', return_value={'ingredients': [], 'searches': ['noodle']})
     @patch('services.find_meals', return_value=[])
