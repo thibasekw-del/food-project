@@ -69,6 +69,7 @@ def generate(key, model, instruction, payload, schema):
             'generationConfig': {'responseMimeType': 'application/json', 'responseSchema': schema,
                                  'temperature': 0.4, 'maxOutputTokens': 8192}}
     fallback = 'gemini-3.5-flash-lite'
+    data = None
     for chosen_model in dict.fromkeys((model, fallback)):
         url = f'https://generativelanguage.googleapis.com/v1beta/models/{quote(chosen_model, safe="")}:generateContent'
         for attempt in range(3):
@@ -76,13 +77,16 @@ def generate(key, model, instruction, payload, schema):
                 data = request('POST', url, headers={'x-goog-api-key': key}, timeout=90, json=body)
                 break
             except ServiceError as exc:
+                if 'โควตาบริการเต็มชั่วคราว' in str(exc):
+                    if chosen_model == fallback:
+                        raise ServiceError('โควตา Gemini รุ่นหลักและรุ่นสำรองเต็ม กรุณาตรวจ Rate limits ใน Google AI Studio') from exc
+                    break
                 if 'ไม่พร้อมชั่วคราว' not in str(exc):
                     raise
                 if attempt < 2:
                     time.sleep(2 ** attempt)
-        else:
-            continue
-        break
+        if data is not None:
+            break
     else:
         raise ServiceError('Gemini ทั้งรุ่นหลักและรุ่นสำรองไม่พร้อมชั่วคราว กรุณาลองอีกครั้งภายหลัง')
     try:

@@ -121,6 +121,15 @@ class MenuTests(unittest.TestCase):
         self.assertIn('gemini-3.5-flash-lite', request.call_args.args[1])
         self.assertEqual(request.call_count, 4)
 
+    @patch('services.request')
+    def test_gemini_fallback_when_primary_quota_is_full(self, request):
+        request.side_effect = [ServiceError('โควตาบริการเต็มชั่วคราว'),
+                               {'candidates': [{'finishReason': 'STOP', 'content': {'parts': [{'text': '{"message":"ok"}'}]}}]}]
+        result = generate('fake', 'gemini-3.6-flash', 'instruction', {}, {'type': 'OBJECT'})
+        self.assertEqual(result['message'], 'ok')
+        self.assertEqual(request.call_count, 2)
+        self.assertIn('gemini-3.5-flash-lite', request.call_args.args[1])
+
     @patch('services.request', return_value={'id_token': 'new', 'refresh_token': 'newrefresh', 'expires_in': '3600'})
     def test_expired_auth_refreshes(self, request):
         user = dict(expires=0, refresh='old', token='expired')
