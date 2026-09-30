@@ -11,6 +11,9 @@ from services import generate
 RECIPE = dict(name='ข้าวผัดไข่', reason='ใช้วัตถุดิบที่มี', source_id='', ingredients=['ข้าว 1 ถ้วย', 'ไข่ 1 ฟอง'],
               missing=['น้ำมัน'], steps=['ผัดไข่ให้สุก ใส่ข้าว ผัดให้ร้อนทั่ว'], time='ประมาณ 15 นาที', tags=['ไม่เผ็ด'])
 RESULT = dict(message='ลองเมนูนี้ครับ', recipes=[RECIPE])
+BUY_RESULT = dict(message='ลองเลือกซื้อเมนูเหล่านี้', recipes=[dict(
+    name='ก๋วยเตี๋ยวน้ำใส', reason='เป็นเมนูเส้นไม่เผ็ด', source_id='', tags=['เส้น', 'น้ำ'],
+    estimated_price='ประมาณ 50–70 บาท', where_to_buy='ร้านก๋วยเตี๋ยวทั่วไป', kind='buy')])
 
 
 class MenuTests(unittest.TestCase):
@@ -116,6 +119,26 @@ class MenuTests(unittest.TestCase):
             at.sidebar.radio[0].set_value('เมนูโปรด').run()
         self.assertFalse(at.exception)
         self.assertTrue(any(x.value == 'ข้าวผัดไข่' for x in at.subheader))
+
+    @patch('services.make_plan', return_value={'ingredients': [], 'searches': ['noodle']})
+    @patch('services.find_meals', return_value=[])
+    @patch('services.recommend')
+    def test_craving_shows_buy_suggestions_without_recipe(self, mock_recommend, *_):
+        mock_recommend.return_value = copy.deepcopy(BUY_RESULT)
+        at = self.app('fake')
+        at.text_area[0].input('อยากกินเมนูเส้นไม่เผ็ด')
+        next(b for b in at.button if b.label.startswith('หาเมนูที่ใช่')).click().run()
+        self.assertFalse(at.exception)
+        self.assertEqual(mock_recommend.call_args.args[2], {'mode': 'craving', 'question': 'อยากกินเมนูเส้นไม่เผ็ด'})
+        self.assertFalse(any(x.label == 'วัตถุดิบและวิธีทำ' for x in at.expander))
+
+    @patch('services.generate', return_value=BUY_RESULT)
+    def test_craving_uses_buy_schema(self, generate):
+        result = recommend('fake', 'model', {'mode': 'craving', 'question': 'เส้น'}, [])
+        self.assertEqual(result['recipes'][0]['kind'], 'buy')
+        self.assertNotIn('steps', result['recipes'][0])
+        self.assertIn('estimated_price', generate.call_args.args[-1]['properties']['recipes']['items']['properties'])
+        self.assertNotIn('steps', generate.call_args.args[-1]['properties']['recipes']['items']['properties'])
 
     @patch('services.make_plan', side_effect=ServiceError('โควตาบริการเต็ม'))
     def test_ai_failure_is_visible(self, _):
