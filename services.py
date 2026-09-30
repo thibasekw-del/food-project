@@ -171,6 +171,18 @@ def token_for(api_key, user):
     return user['token']
 
 
+def restore_login(api_key, refresh_token):
+    data = request('POST', 'https://securetoken.googleapis.com/v1/token', params={'key': api_key},
+                   data={'grant_type': 'refresh_token', 'refresh_token': refresh_token})
+    account = request('POST', 'https://identitytoolkit.googleapis.com/v1/accounts:lookup',
+                      params={'key': api_key}, json={'idToken': data['id_token']})
+    users = account.get('users', [])
+    if not users:
+        raise ServiceError('ไม่พบบัญชีผู้ใช้')
+    return {'uid': users[0]['localId'], 'email': users[0]['email'], 'token': data['id_token'],
+            'refresh': data['refresh_token'], 'expires': time.time() + int(data['expires_in']) - 60}
+
+
 def firestore(project, api_key, user, collection, document=None, payload=None):
     # End-user ID tokens + security rules isolate each user's data. No Admin key required.
     root = f'https://firestore.googleapis.com/v1/projects/{quote(project, safe="")}/databases/(default)/documents/users/{quote(user["uid"], safe="")}/{collection}'

@@ -5,7 +5,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from streamlit.testing.v1 import AppTest
-from services import ServiceError, recommend, token_for
+from services import ServiceError, recommend, restore_login, token_for
 from services import generate
 
 RECIPE = dict(name='ข้าวผัดไข่', reason='ใช้วัตถุดิบที่มี', source_id='', ingredients=['ข้าว 1 ถ้วย', 'ไข่ 1 ฟอง'],
@@ -14,6 +14,19 @@ RESULT = dict(message='ลองเมนูนี้ครับ', recipes=[REC
 
 
 class MenuTests(unittest.TestCase):
+    def setUp(self):
+        class TestCookies(dict):
+            def ready(self):
+                return True
+
+            def save(self):
+                pass
+
+        self.cookies = TestCookies()
+        self.cookie_patch = patch('auth_session.get_cookies', return_value=self.cookies)
+        self.cookie_patch.start()
+        self.addCleanup(self.cookie_patch.stop)
+
     def app(self, key=''):
         # Keep a developer's local .env from changing isolated UI tests.
         os.environ['FIREBASE_API_KEY'] = ''
@@ -21,6 +34,7 @@ class MenuTests(unittest.TestCase):
         os.environ['GEMINI_API_KEY'] = ''
         at = AppTest.from_file(str(Path(__file__).resolve().parents[1] / 'app.py'), default_timeout=15)
         at.secrets['GEMINI_API_KEY'] = key
+        at.secrets['SESSION_COOKIE_PASSWORD'] = 'test-cookie-secret'
         at.secrets['FIREBASE_API_KEY'] = ''
         at.secrets['FIREBASE_PROJECT_ID'] = ''
         at.session_state['user'] = {'uid': 'test-user', 'email': 'test@example.com', 'profile_synced': True}
@@ -28,16 +42,18 @@ class MenuTests(unittest.TestCase):
 
     def test_login_gate_and_logout(self):
         at = self.app()
+        self.cookies['firebase_refresh'] = 'old-token'
         at.session_state['history'] = [{'private': 'data'}]
         next(b for b in at.button if b.label == 'ออกจากระบบ').click().run()
         self.assertFalse(at.exception)
         self.assertIsNone(at.session_state.user)
         self.assertEqual(at.session_state.history, [])
+        self.assertNotIn('firebase_refresh', self.cookies)
         self.assertEqual(len(at.text_area), 0)
         self.assertEqual([t.label for t in at.tabs], ['เข้าสู่ระบบ', 'สมัครสมาชิก'])
 
     @patch('services.firestore', return_value={})
-    @patch('services.login', return_value={'uid': 'new-user', 'email': 'new@example.com'})
+    @patch('services.login', return_value={'uid': 'new-user', 'email': 'new@example.com', 'refresh': 'refresh-token'})
     def test_register_profile_and_login(self, auth, database):
         at = self.app()
         at.session_state['user'] = None
@@ -50,22 +66,34 @@ class MenuTests(unittest.TestCase):
         next(b for b in at.button if b.label == 'สมัครสมาชิก').click().run()
         self.assertFalse(at.exception)
         self.assertEqual(at.session_state.user['uid'], 'new-user')
+        self.assertEqual(self.cookies['firebase_refresh'], 'refresh-token')
         self.assertTrue(auth.call_args.args[3])
         payload = database.call_args.args[-1]
         self.assertEqual(payload, {'uid': 'new-user', 'email': 'new@example.com'})
         self.assertNotIn('password', payload)
 
+    @patch('services.request')
+    def test_restore_login_validates_firebase_account(self, request):
+        request.side_effect = [
+            {'id_token': 'id-token', 'refresh_token': 'rotated-token', 'expires_in': '3600'},
+            {'users': [{'localId': 'account-1', 'email': 'person@example.com'}]},
+        ]
+        user = restore_login('api-key', 'old-token')
+        self.assertEqual(user['uid'], 'account-1')
+        self.assertEqual(user['refresh'], 'rotated-token')
+        self.assertEqual(request.call_count, 2)
+
     def test_initial_and_missing_key(self):
         at = self.app()
         self.assertFalse(at.exception)
         at.text_area[0].input('อยากกินเส้น')
-        at.button[0].click().run()
+        next(b for b in at.button if b.label.startswith('หาเมนูที่ใช่')).click().run()
         self.assertFalse(at.exception)
         self.assertIn('GEMINI_API_KEY', at.error[0].value)
 
     def test_empty_request(self):
         at = self.app('fake')
-        at.button[0].click().run()
+        next(b for b in at.button if b.label.startswith('หาเมนูที่ใช่')).click().run()
         self.assertTrue(at.warning)
         self.assertFalse(at.exception)
 
@@ -77,7 +105,7 @@ class MenuTests(unittest.TestCase):
         at = self.app('fake')
         at.radio[0].set_value('🥕 มีอะไรในตู้เย็น').run()
         at.text_area[0].input('ไข่ ข้าว')
-        at.button[0].click().run()
+        next(b for b in at.button if b.label.startswith('หาเมนูที่ใช่')).click().run()
         self.assertFalse(at.exception)
         self.assertEqual(len(at.session_state.history), 1)
         self.assertEqual(mock_recommend.call_args.args[2]['mode'], 'pantry')
@@ -93,7 +121,7 @@ class MenuTests(unittest.TestCase):
     def test_ai_failure_is_visible(self, _):
         at = self.app('fake')
         at.text_area[0].input('เส้น')
-        at.button[0].click().run()
+        next(b for b in at.button if b.label.startswith('หาเมนูที่ใช่')).click().run()
         self.assertFalse(at.exception)
         self.assertIn('โควตา', at.error[0].value)
 

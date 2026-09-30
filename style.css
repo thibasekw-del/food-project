@@ -1,4 +1,6 @@
 .block-container {max-width:1180px;padding-top:3rem;padding-bottom:4rem;}
+[data-testid="stToolbar"], [data-testid="stHeaderActionElements"], [data-testid="stAppDeployButton"] {display:none!important;}
+[data-testid="stHeader"] {background:transparent!important;}
 h1 {font-size:clamp(2.4rem,5vw,4rem)!important;letter-spacing:-.04em;color:#234C39;}
 h2,h3 {letter-spacing:-.025em;}
 .eyebrow {font-size:.72rem;letter-spacing:.2em;color:#63816D;font-weight:700;margin-bottom:.4rem;}

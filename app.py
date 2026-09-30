@@ -8,7 +8,8 @@ from pathlib import Path
 import streamlit as st
 from dotenv import load_dotenv
 
-from services import ServiceError, find_meals, firestore, login, make_plan, recommend
+from auth_session import COOKIE_NAME, get_cookies
+from services import ServiceError, find_meals, firestore, login, make_plan, recommend, restore_login, token_for
 
 load_dotenv(Path(__file__).with_name('.env'), override=False)
 
@@ -32,6 +33,29 @@ firebase_ready = bool(firebase_key and project)
 for name, default in [('user', None), ('history', []), ('favorites', []), ('result', None), ('last_request', 0)]:
     if name not in st.session_state:
         st.session_state[name] = default
+
+cookie_secret = setting('SESSION_COOKIE_PASSWORD') or gemini
+cookies = get_cookies(cookie_secret) if cookie_secret else None
+if cookies is not None and not cookies.ready():
+    st.stop()
+if cookies is not None and firebase_ready:
+    if not st.session_state.user and cookies.get(COOKIE_NAME):
+        try:
+            st.session_state.user = restore_login(firebase_key, cookies[COOKIE_NAME])
+        except (ServiceError, KeyError, ValueError):
+            del cookies[COOKIE_NAME]
+            cookies.save()
+    if st.session_state.user and 'expires' in st.session_state.user:
+        try:
+            token_for(firebase_key, st.session_state.user)
+            if cookies.get(COOKIE_NAME) != st.session_state.user.get('refresh'):
+                cookies[COOKIE_NAME] = st.session_state.user['refresh']
+                cookies.save()
+        except ServiceError:
+            st.session_state.user = None
+            if cookies.get(COOKIE_NAME):
+                del cookies[COOKIE_NAME]
+                cookies.save()
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -90,13 +114,22 @@ with st.sidebar:
     if st.session_state.user:
         st.caption('เข้าสู่ระบบแล้ว')
         st.write(st.session_state.user['email'])
-        if st.button('ออกจากระบบ', use_container_width=True):
-            for name, value in [('user', None), ('history', []), ('favorites', []), ('result', None)]:
-                st.session_state[name] = value
-            st.rerun()
     else:
         st.caption('เข้าสู่ระบบเพื่อค้นหาและเก็บเมนูของคุณ')
     st.caption('สูตรและรูปภาพ: TheMealDB • คำแนะนำภาษาไทย: Gemini')
+
+if st.session_state.user:
+    _, menu_column = st.columns([12, 1])
+    with menu_column:
+        with st.popover('⋮', help='เมนูบัญชี'):
+            st.caption(st.session_state.user['email'])
+            if st.button('ออกจากระบบ', use_container_width=True):
+                if cookies is not None and cookies.get(COOKIE_NAME):
+                    del cookies[COOKIE_NAME]
+                    cookies.save()
+                for name, value in [('user', None), ('history', []), ('favorites', []), ('result', None)]:
+                    st.session_state[name] = value
+                st.rerun()
 
 
 st.markdown('<div class="eyebrow">YOUR EVERYDAY KITCHEN COMPANION</div>', unsafe_allow_html=True)
@@ -126,6 +159,9 @@ if not st.session_state.user:
                     except ServiceError:
                         st.error('ดำเนินการไม่สำเร็จ ตรวจอีเมล/รหัสผ่าน หากเคยสมัครแล้วให้ใช้หน้าเข้าสู่ระบบ')
                     else:
+                        if cookies is not None and user.get('refresh'):
+                            cookies[COOKIE_NAME] = user['refresh']
+                            cookies.save()
                         st.session_state.user = user
                         st.session_state.history = []
                         st.session_state.favorites = []
