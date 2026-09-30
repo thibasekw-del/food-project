@@ -89,6 +89,9 @@ class MenuTests(unittest.TestCase):
     def test_initial_and_missing_key(self):
         at = self.app()
         self.assertFalse(at.exception)
+        self.assertFalse(any(x.label.startswith('ตัวเลือกเพิ่มเติม') for x in at.expander))
+        self.assertEqual(len(at.selectbox), 0)
+        self.assertEqual(len(at.number_input), 0)
         at.text_area[0].input('อยากกินเส้น')
         next(b for b in at.button if b.label.startswith('หาเมนูที่ใช่')).click().run()
         self.assertFalse(at.exception)

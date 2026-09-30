@@ -219,22 +219,8 @@ if st.session_state.get('last_mode') != mode:
     st.session_state.last_mode = mode
 with st.form('preferences'):
     question = st.text_area('วัตถุดิบที่มี พร้อมปริมาณถ้าทราบ' if pantry else 'วันนี้อยากกินอะไร?',
-                            placeholder='เช่น ไข่ 2 ฟอง หมูสับ ข้าวสวย ต้นหอม ซีอิ๊ว และน้ำมัน' if pantry else 'เช่น อยากกินเมนูเส้น มีอะไรแนะนำบ้าง',
+                            placeholder='เช่น มีไข่กับข้าว ทำอะไรได้บ้าง' if pantry else 'เช่น อยากกินเส้นไม่เผ็ด งบไม่เกิน 80 บาท',
                             height=110, max_chars=1500)
-    with st.expander('ตัวเลือกเพิ่มเติม (ไม่จำเป็นต้องเลือก)'):
-        a, b, c = st.columns(3)
-        spice = a.selectbox('ความเผ็ด', ['ได้ทุกแบบ', 'ไม่เผ็ด', 'เผ็ดน้อย', 'เผ็ดมาก'])
-        style = b.selectbox('ลักษณะอาหาร', ['ได้ทุกแบบ', 'แห้ง', 'น้ำ / ซุป'])
-        diet = c.selectbox('รูปแบบการกิน', ['ทั่วไป', 'มังสวิรัติ (กินไข่และนม)', 'วีแกน', 'ไม่กินหมู'])
-        if pantry:
-            a, b, c = st.columns(3)
-            minutes = a.selectbox('เวลาทำอาหาร', [0, 15, 30, 45, 60], format_func=lambda x: 'ไม่จำกัด' if x == 0 else f'ไม่เกิน {x} นาที')
-        else:
-            b, c = st.columns(2)
-            minutes = 0
-        budget = b.number_input('งบประมาณต่อมื้อ (บาท)', min_value=0, max_value=1000, value=0, step=10, help='0 = ไม่กำหนดงบ')
-        servings = c.number_input('จำนวนคน', min_value=1, max_value=8, value=1)
-        allergies = st.text_input('อาหารที่แพ้หรือวัตถุดิบที่ไม่กิน', placeholder='เช่น ถั่วลิสง กุ้ง นม หรือเว้นว่าง', max_chars=300)
     submitted = st.form_submit_button('หาเมนูที่ใช่ให้ฉัน  →', type='primary', use_container_width=True)
 
 if not gemini:
@@ -252,12 +238,6 @@ if submitted:
         st.session_state.last_request = time.time()
         st.session_state.result = None
         preferences = dict(mode='pantry' if pantry else 'craving', question=question.strip())
-        for name, value, default in [('spice', spice, 'ได้ทุกแบบ'), ('style', style, 'ได้ทุกแบบ'),
-                                     ('diet', diet, 'ทั่วไป'), ('minutes', minutes, 0),
-                                     ('budget_thb', budget, 0), ('servings', servings, 1),
-                                     ('allergies', allergies, '')]:
-            if value != default:
-                preferences[name] = value
         try:
             with st.spinner('กำลังหาเมนูให้คุณ…'):
                 plan = make_plan(gemini, model, preferences)
