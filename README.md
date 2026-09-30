@@ -94,6 +94,7 @@ Firestore บันทึกคำถามและผลลัพธ์เม�
 - `app.py`: หน้าเว็บและควบคุมการทำงาน
 - `services.py`: Gemini, TheMealDB, Firebase Auth/Firestore
 - `style.css`: รูปแบบหน้าจอ
+- `assets/food-hero.png`: ภาพอาหารที่สร้างขึ้นสำหรับหัวหน้าเว็บ
 - `firestore.rules`: สิทธิ์ข้อมูลรายบุคคล
 - `.env`: ใส่คีย์จริงสำหรับรันในเครื่อง ห้ามอัปโหลดขึ้น GitHub
 - `.streamlit/config.toml`: ตั้งค่าสีและรูปแบบ Streamlit ไม่ใช่ไฟล์คีย์

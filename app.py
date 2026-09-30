@@ -113,23 +113,26 @@ def recipe_card(recipe, key):
                 st.error(str(exc))
 
 
-if st.session_state.user:
-    _, menu_column = st.columns([12, 1])
-    with menu_column:
-        with st.popover('⋮', help='เมนูบัญชี'):
-            st.caption(st.session_state.user['email'])
-            if st.button('ออกจากระบบ', use_container_width=True):
-                if cookies is not None and cookies.get(COOKIE_NAME):
-                    del cookies[COOKIE_NAME]
-                    cookies.save()
-                for name, value in [('user', None), ('history', []), ('favorites', []), ('result', None)]:
-                    st.session_state[name] = value
-                st.rerun()
-
-
-st.markdown('<div class="eyebrow">YOUR EVERYDAY KITCHEN COMPANION</div>', unsafe_allow_html=True)
-st.title('วันนี้กินอะไรดี?')
-st.markdown('เปลี่ยนความอยากและของในตู้เย็น ให้เป็นมื้ออร่อยที่เหมาะกับคุณ')
+hero_text, hero_visual = st.columns([1.1, 1], gap='large', vertical_alignment='center')
+with hero_text:
+    st.markdown('<div class="eyebrow">MENU MATE · ผู้ช่วยเลือกมื้ออร่อย</div>', unsafe_allow_html=True)
+    st.title('วันนี้กินอะไรดี?')
+    st.markdown('บอกความอยากหรือของในตู้เย็น แล้วเลือกมื้อที่ใช่')
+with hero_visual:
+    if st.session_state.user:
+        _, menu_column = st.columns([10, 1])
+        with menu_column:
+            with st.popover('⋮', help='เมนูบัญชี'):
+                st.caption(st.session_state.user['email'])
+                if st.button('ออกจากระบบ', use_container_width=True):
+                    if cookies is not None and cookies.get(COOKIE_NAME):
+                        del cookies[COOKIE_NAME]
+                        cookies.save()
+                    for name, value in [('user', None), ('history', []), ('favorites', []), ('result', None)]:
+                        st.session_state[name] = value
+                    st.rerun()
+    with st.container(key='hero-photo'):
+        st.image(str(Path(__file__).with_name('assets') / 'food-hero.png'), use_container_width=True)
 
 if not st.session_state.user:
     st.subheader('ยินดีต้อนรับสู่ครัวของคุณ')
@@ -165,7 +168,9 @@ if not st.session_state.user:
     st.caption('บัญชีจัดการด้วย Firebase Authentication และเก็บโปรไฟล์ใน Firestore')
     st.stop()
 
-page = st.radio('หน้าเว็บ', ['หาเมนูวันนี้', 'เมนูโปรด', 'ประวัติคำแนะนำ'], horizontal=True)
+page = st.segmented_control('หน้าเว็บ', ['หาเมนูวันนี้', 'เมนูโปรด', 'ประวัติคำแนะนำ'],
+                            default='หาเมนูวันนี้', selection_mode='single', required=True,
+                            label_visibility='collapsed', width='stretch')
 
 # Retry profile sync on subsequent runs if Firestore was not configured at signup.
 if not st.session_state.user.get('profile_synced'):
@@ -201,7 +206,7 @@ if page != 'หาเมนูวันนี้':
                     recipe_card(recipe, f'history-{i}-{j}')
     st.stop()
 
-st.markdown('<div class="intro">01 &nbsp; บอกเราเกี่ยวกับมื้อของคุณ</div>', unsafe_allow_html=True)
+st.markdown('<div class="intro">บอกเราเกี่ยวกับมื้อของคุณ</div>', unsafe_allow_html=True)
 mode = st.radio('เลือกวิธีค้นหา', ['💭 อยากกินอะไร', '🥕 มีอะไรในตู้เย็น'], horizontal=True)
 pantry = mode.startswith('🥕')
 if st.session_state.get('last_mode') != mode:

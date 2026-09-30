@@ -1,10 +1,12 @@
-.block-container {max-width:1180px;padding-top:3rem;padding-bottom:4rem;}
+.block-container {max-width:1180px;padding-top:1.2rem;padding-bottom:3rem;}
 [data-testid="stToolbar"], [data-testid="stHeaderActionElements"], [data-testid="stAppDeployButton"] {display:none!important;}
 [data-testid="stHeader"] {background:transparent!important;}
-h1 {font-size:clamp(2.4rem,5vw,4rem)!important;letter-spacing:-.04em;color:#234C39;}
+h1 {font-size:clamp(2.4rem,5vw,3.7rem)!important;letter-spacing:-.04em;color:#234C39;}
 h2,h3 {letter-spacing:-.025em;}
-.eyebrow {font-size:.72rem;letter-spacing:.2em;color:#63816D;font-weight:700;margin-bottom:.4rem;}
-.intro {margin:2rem 0 1rem;color:#53775F;font-weight:700;font-size:.9rem;}
+.eyebrow {font-size:.75rem;letter-spacing:.08em;color:#63816D;font-weight:700;margin-bottom:.35rem;}
+.intro {margin:1.15rem 0 .5rem;color:#53775F;font-weight:700;font-size:.9rem;}
+.st-key-hero-photo img {width:100%;aspect-ratio:2.45/1;max-height:220px;object-fit:cover;border-radius:20px;box-shadow:0 12px 28px rgba(35,61,49,.12);}
+[data-testid="stSegmentedControl"] button {border-radius:12px!important;min-height:2.65rem;padding-inline:1.1rem;}
 [data-testid="stForm"] {border:1px solid #DCE2D5;border-radius:20px;background:#FFFEF9;padding:1.5rem;}
 [data-testid="stVerticalBlockBorderWrapper"] {border-radius:18px;}
 .stButton button,.stFormSubmitButton button {border-radius:12px;min-height:2.8rem;}
@@ -13,4 +15,4 @@ h2,h3 {letter-spacing:-.025em;}
 .empty {text-align:center;padding:3rem 1rem;color:#71816D;border:1px dashed #CED8C7;border-radius:20px;margin-top:2rem;}
 .empty span {font-size:2.4rem;}.empty h3 {font-size:1.3rem;}.empty p {font-size:.95rem;}
 [data-testid="stImage"] img {border-radius:12px;object-fit:cover;max-height:230px;}
-@media(max-width:640px){.block-container{padding-top:1.5rem;}[data-testid="stForm"]{padding:1rem;}}
+@media(max-width:640px){.block-container{padding-top:.8rem;}[data-testid="stForm"]{padding:1rem;}.st-key-hero-photo{display:none;}}
