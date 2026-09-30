@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 from streamlit.testing.v1 import AppTest
 from services import ServiceError, recommend, token_for
+from services import generate
 
 RECIPE = dict(name='ข้าวผัดไข่', reason='ใช้วัตถุดิบที่มี', source_id='', ingredients=['ข้าว 1 ถ้วย', 'ไข่ 1 ฟอง'],
               missing=['น้ำมัน'], steps=['ผัดไข่ให้สุก ใส่ข้าว ผัดให้ร้อนทั่ว'], time='ประมาณ 15 นาที', tags=['ไม่เผ็ด'])
@@ -109,6 +110,16 @@ class MenuTests(unittest.TestCase):
     def test_invalid_recipe_rejected(self, _):
         with self.assertRaises(ServiceError):
             recommend('fake', 'model', {}, [])
+
+    @patch('services.time.sleep')
+    @patch('services.request')
+    def test_gemini_fallback_after_temporary_failures(self, request, _):
+        request.side_effect = [ServiceError('บริการ AI ไม่พร้อมชั่วคราว')] * 3 + [
+            {'candidates': [{'finishReason': 'STOP', 'content': {'parts': [{'text': '{"message":"ok"}'}]}}]}]
+        result = generate('fake', 'gemini-3.6-flash', 'instruction', {}, {'type': 'OBJECT'})
+        self.assertEqual(result['message'], 'ok')
+        self.assertIn('gemini-3.5-flash-lite', request.call_args.args[1])
+        self.assertEqual(request.call_count, 4)
 
     @patch('services.request', return_value={'id_token': 'new', 'refresh_token': 'newrefresh', 'expires_in': '3600'})
     def test_expired_auth_refreshes(self, request):

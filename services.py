@@ -64,19 +64,27 @@ def find_meals(key, plan):
 
 
 def generate(key, model, instruction, payload, schema):
-    url = f'https://generativelanguage.googleapis.com/v1beta/models/{quote(model, safe="")}:generateContent'
     body = {'systemInstruction': {'parts': [{'text': instruction}]},
             'contents': [{'role': 'user', 'parts': [{'text': json.dumps(payload, ensure_ascii=False)}]}],
             'generationConfig': {'responseMimeType': 'application/json', 'responseSchema': schema,
                                  'temperature': 0.4, 'maxOutputTokens': 8192}}
-    for attempt in range(3):
-        try:
-            data = request('POST', url, headers={'x-goog-api-key': key}, timeout=90, json=body)
-            break
-        except ServiceError as exc:
-            if 'ไม่พร้อมชั่วคราว' not in str(exc) or attempt == 2:
-                raise
-            time.sleep(2 ** attempt)
+    fallback = 'gemini-3.5-flash-lite'
+    for chosen_model in dict.fromkeys((model, fallback)):
+        url = f'https://generativelanguage.googleapis.com/v1beta/models/{quote(chosen_model, safe="")}:generateContent'
+        for attempt in range(3):
+            try:
+                data = request('POST', url, headers={'x-goog-api-key': key}, timeout=90, json=body)
+                break
+            except ServiceError as exc:
+                if 'ไม่พร้อมชั่วคราว' not in str(exc):
+                    raise
+                if attempt < 2:
+                    time.sleep(2 ** attempt)
+        else:
+            continue
+        break
+    else:
+        raise ServiceError('Gemini ทั้งรุ่นหลักและรุ่นสำรองไม่พร้อมชั่วคราว กรุณาลองอีกครั้งภายหลัง')
     try:
         candidate = data['candidates'][0]
         if candidate.get('finishReason') == 'MAX_TOKENS':
