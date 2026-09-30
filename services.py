@@ -17,6 +17,10 @@ def request(method, url, **kwargs):
             raise ServiceError('โควตาบริการเต็มชั่วคราว กรุณารอแล้วลองใหม่')
         if response.status_code in (401, 403):
             raise ServiceError('ไม่มีสิทธิ์เข้าถึงบริการ กรุณาตรวจคีย์ การเข้าสู่ระบบ และ Firestore Rules')
+        if response.status_code == 404 and 'generativelanguage.googleapis.com' in url:
+            raise ServiceError('ไม่พบโมเดล Gemini นี้ กรุณาตรวจ GEMINI_MODEL ใน Streamlit Secrets')
+        if response.status_code in (500, 502, 503, 504):
+            raise ServiceError('บริการ AI ไม่พร้อมชั่วคราว กรุณาลองอีกครั้งในอีกสักครู่')
         if not response.ok:
             raise ServiceError('บริการตอบกลับไม่สำเร็จ กรุณาตรวจการตั้งค่าหรือลองใหม่')
         return response.json()
@@ -60,14 +64,24 @@ def find_meals(key, plan):
 
 
 def generate(key, model, instruction, payload, schema):
-    data = request('POST', f'https://generativelanguage.googleapis.com/v1beta/models/{quote(model, safe="")}:generateContent',
-                   headers={'x-goog-api-key': key}, timeout=65,
-                   json={'systemInstruction': {'parts': [{'text': instruction}]},
-                         'contents': [{'role': 'user', 'parts': [{'text': json.dumps(payload, ensure_ascii=False)}]}],
-                         'generationConfig': {'responseMimeType': 'application/json', 'responseSchema': schema,
-                                              'temperature': 0.4, 'maxOutputTokens': 6000}})
+    url = f'https://generativelanguage.googleapis.com/v1beta/models/{quote(model, safe="")}:generateContent'
+    body = {'systemInstruction': {'parts': [{'text': instruction}]},
+            'contents': [{'role': 'user', 'parts': [{'text': json.dumps(payload, ensure_ascii=False)}]}],
+            'generationConfig': {'responseMimeType': 'application/json', 'responseSchema': schema,
+                                 'temperature': 0.4, 'maxOutputTokens': 8192}}
+    for attempt in range(3):
+        try:
+            data = request('POST', url, headers={'x-goog-api-key': key}, timeout=90, json=body)
+            break
+        except ServiceError as exc:
+            if 'ไม่พร้อมชั่วคราว' not in str(exc) or attempt == 2:
+                raise
+            time.sleep(2 ** attempt)
     try:
-        text = ''.join(p.get('text', '') for p in data['candidates'][0]['content']['parts'])
+        candidate = data['candidates'][0]
+        if candidate.get('finishReason') == 'MAX_TOKENS':
+            raise ServiceError('AI ตอบยาวเกินขีดจำกัด กรุณาลองลดรายละเอียดคำถามแล้วส่งใหม่')
+        text = ''.join(p.get('text', '') for p in candidate['content']['parts'])
         return json.loads(text)
     except (KeyError, IndexError, TypeError, ValueError) as exc:
         raise ServiceError('AI ตอบไม่ครบหรือไม่สามารถตอบคำขอนี้ได้ กรุณาปรับคำถามแล้วลองใหม่') from exc
@@ -107,7 +121,9 @@ def recommend(key, model, preferences, sources):
         'AI-created Thai recipes are allowed, but do not invent sources. Never invent image URLs. '
         'If requirements conflict, return no recipes and explain what must change. '
         'Use message to explain choices; time must explicitly be an estimate.',
-        {'preferences': preferences, 'source_recipes': sources}, RESULT_SCHEMA)
+        {'preferences': preferences, 'source_recipes': [
+            {**s, 'instructions': s['instructions'][:1400], 'ingredients': s['ingredients'][:16]}
+            for s in sources[:4]]}, RESULT_SCHEMA)
     if not isinstance(result.get('message'), str) or not isinstance(result.get('recipes'), list):
         raise ServiceError('รูปแบบคำตอบไม่ถูกต้อง กรุณาลองใหม่')
     by_id = {s['id']: s for s in sources}

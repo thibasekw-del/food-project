@@ -1,4 +1,5 @@
 import copy
+import os
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -13,6 +14,10 @@ RESULT = dict(message='ลองเมนูนี้ครับ', recipes=[REC
 
 class MenuTests(unittest.TestCase):
     def app(self, key=''):
+        # Keep a developer's local .env from changing isolated UI tests.
+        os.environ['FIREBASE_API_KEY'] = ''
+        os.environ['FIREBASE_PROJECT_ID'] = ''
+        os.environ['GEMINI_API_KEY'] = ''
         at = AppTest.from_file(str(Path(__file__).resolve().parents[1] / 'app.py'), default_timeout=15)
         at.secrets['GEMINI_API_KEY'] = key
         at.secrets['FIREBASE_API_KEY'] = ''
